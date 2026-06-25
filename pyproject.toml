@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Multimodal Data Processing with Pixeltable and Backblaze B2"
 requires-python = ">=3.10"
 dependencies = [
+    "boto3",
     "pixeltable>=0.4.24",
 ]
 
@@ -12,4 +13,3 @@ dev = [
     "jupyter",
     "ipykernel",
 ]
-
