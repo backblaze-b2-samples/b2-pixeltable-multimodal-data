@@ -52,6 +52,11 @@ B2_PUBLIC_URL_BASE=https://s3.your-bucket-region.backblazeb2.com/your-bucket-nam
 ```
 
 `B2_PUBLIC_URL_BASE` is the base URL Pixeltable writes generated assets under.
-The notebook also configures a Backblaze sample user agent on its S3 client.
+If omitted, the notebook builds it from the selected region and bucket. If set,
+it must be an HTTPS Backblaze B2 URL rooted at the selected bucket. The notebook
+also configures a Backblaze sample user agent on its S3 client and runs a
+bounded bucket preflight before frame processing starts. Previous key-id and
+bucket variable names are accepted for a transition period, but new automation
+should use the standard names above.
 
 ---

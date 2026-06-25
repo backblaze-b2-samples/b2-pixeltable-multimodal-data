@@ -355,6 +355,7 @@ version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
     { name = "boto3" },
+    { name = "botocore" },
     { name = "pixeltable" },
 ]
 
@@ -366,8 +367,9 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "boto3" },
-    { name = "pixeltable", specifier = ">=0.4.24" },
+    { name = "boto3", specifier = ">=1.43.36,<1.44" },
+    { name = "botocore", specifier = ">=1.43.36,<1.44" },
+    { name = "pixeltable", specifier = ">=0.4.24,<0.7" },
 ]
 
 [package.metadata.requires-dev]
