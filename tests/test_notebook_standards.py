@@ -80,6 +80,22 @@ class NotebookStandardsTests(unittest.TestCase):
         self.assertTrue(computed_column_indexes)
         self.assertLess(setup_indexes[0], min(computed_column_indexes))
 
+    def test_pixeltable_user_agent_hook_runs_before_pixeltable_import(self):
+        setup_indexes = [
+            index
+            for index, source in enumerate(self.code_cells)
+            if "configure_pixeltable_b2_user_agent()" in source
+        ]
+        pixeltable_import_indexes = [
+            index
+            for index, source in enumerate(self.code_cells)
+            if "import pixeltable as pxt" in source
+        ]
+
+        self.assertTrue(setup_indexes)
+        self.assertTrue(pixeltable_import_indexes)
+        self.assertLess(setup_indexes[0], pixeltable_import_indexes[0])
+
     def test_notebook_install_cells_do_not_bypass_locked_path(self):
         for source in self.code_cells:
             for line in source.splitlines():

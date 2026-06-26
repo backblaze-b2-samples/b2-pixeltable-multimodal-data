@@ -4,9 +4,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from getpass import getpass
+import logging
 import os
 import re
-from typing import MutableMapping
+from typing import Any, MutableMapping
 from urllib.parse import urlparse, urlunparse
 
 
@@ -212,6 +213,83 @@ def export_s3_compatible_environment(
     env["AWS_DEFAULT_REGION"] = config.region
     # Botocore clients created later by Pixeltable inherit this app id.
     env["AWS_SDK_UA_APP_ID"] = B2_SAMPLE_UA_APP_ID
+
+
+def _pixeltable_s3_config_args(user_agent: str = B2_SAMPLE_USER_AGENT) -> dict[str, Any]:
+    return {
+        "max_pool_connections": 30,
+        "connect_timeout": 15,
+        "read_timeout": 30,
+        "retries": {"max_attempts": 3, "mode": "adaptive"},
+        "s3": {"addressing_style": "path"},
+        "user_agent_extra": user_agent,
+    }
+
+
+def configure_pixeltable_b2_user_agent(user_agent: str = B2_SAMPLE_USER_AGENT) -> None:
+    """Patch Pixeltable's S3 factories to carry this sample's user agent.
+
+    Pixeltable 0.4.24 exposes S3/B2 profile configuration, but its internal
+    S3Store factory hard-codes user_agent_extra="pixeltable". Apply this before
+    Pixeltable creates B2 clients so delegated media writes meet the B2 sample
+    user-agent standard too.
+    """
+    try:
+        import boto3
+        from botocore import UNSIGNED
+        from botocore.config import Config
+        from pixeltable.utils.s3_store import S3Store
+    except ImportError as exc:
+        raise B2ConfigError(
+            "Install Pixeltable, boto3, and botocore before configuring "
+            "Pixeltable's B2 user agent."
+        ) from exc
+
+    if getattr(S3Store, "_b2_sample_user_agent", None) == user_agent:
+        return
+
+    if not hasattr(S3Store, "_b2_original_create_boto_client"):
+        S3Store._b2_original_create_boto_client = S3Store.create_boto_client
+    if not hasattr(S3Store, "_b2_original_create_boto_resource"):
+        S3Store._b2_original_create_boto_resource = S3Store.create_boto_resource
+
+    logger = logging.getLogger("pixeltable")
+
+    @classmethod
+    def create_boto_client(cls, profile_name: str | None = None, extra_args=None):
+        extra_args = dict(extra_args or {})
+        config_args = _pixeltable_s3_config_args(user_agent)
+        session = cls.create_boto_session(profile_name)
+
+        try:
+            credentials = session.get_credentials()
+            if credentials is None:
+                raise RuntimeError("No boto credentials available")
+            credentials.get_frozen_credentials()
+            config = Config(**config_args)
+            return session.client("s3", config=config, **extra_args)
+        except Exception as exc:
+            logger.info(
+                "Error occurred while creating S3 client: %s, fallback to unsigned mode",
+                exc,
+            )
+            config_args = config_args.copy()
+            config_args["signature_version"] = UNSIGNED
+            config = Config(**config_args)
+            return boto3.client("s3", config=config, **extra_args)
+
+    @classmethod
+    def create_boto_resource(cls, profile_name: str | None = None, extra_args=None):
+        config = Config(**_pixeltable_s3_config_args(user_agent))
+        return cls.create_boto_session(profile_name).resource(
+            "s3",
+            config=config,
+            **dict(extra_args or {}),
+        )
+
+    S3Store.create_boto_client = create_boto_client
+    S3Store.create_boto_resource = create_boto_resource
+    S3Store._b2_sample_user_agent = user_agent
 
 
 def create_b2_s3_client(config: B2NotebookConfig):

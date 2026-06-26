@@ -1,11 +1,14 @@
-import os
+import sys
+from types import ModuleType, SimpleNamespace
 import unittest
 from unittest.mock import patch
 
 from b2_config import (
     B2ConfigError,
     B2_SAMPLE_UA_APP_ID,
+    B2_SAMPLE_USER_AGENT,
     build_b2_config,
+    configure_pixeltable_b2_user_agent,
     export_s3_compatible_environment,
     preflight_b2_bucket,
 )
@@ -41,6 +44,36 @@ class RecordingClient:
 
     def head_bucket(self, *, Bucket):
         self.bucket = Bucket
+
+
+class FakeCredentials:
+    def get_frozen_credentials(self):
+        return object()
+
+
+class FakeBotoSession:
+    def get_credentials(self):
+        return FakeCredentials()
+
+    def client(self, service_name, **kwargs):
+        return SimpleNamespace(service_name=service_name, kwargs=kwargs)
+
+    def resource(self, service_name, **kwargs):
+        return SimpleNamespace(service_name=service_name, kwargs=kwargs)
+
+
+class FakePixeltableS3Store:
+    @classmethod
+    def create_boto_session(cls, profile_name=None):
+        return FakeBotoSession()
+
+    @classmethod
+    def create_boto_client(cls, profile_name=None, extra_args=None):
+        raise AssertionError("unpatched Pixeltable client factory was used")
+
+    @classmethod
+    def create_boto_resource(cls, profile_name=None, extra_args=None):
+        raise AssertionError("unpatched Pixeltable resource factory was used")
 
 
 class B2ConfigTests(unittest.TestCase):
@@ -90,31 +123,33 @@ class B2ConfigTests(unittest.TestCase):
         self.assertNotIn("AWS" + "_SECURITY_TOKEN", env)
         self.assertEqual(env["AWS" + "_SDK_UA_APP_ID"], B2_SAMPLE_UA_APP_ID)
 
-    def test_exported_user_agent_app_id_reaches_delegated_boto_clients(self):
-        import boto3
-        from botocore.config import Config
+    def test_configures_pixeltable_s3_factories_with_sample_user_agent(self):
+        pixeltable_module = ModuleType("pixeltable")
+        pixeltable_utils_module = ModuleType("pixeltable.utils")
+        pixeltable_s3_module = ModuleType("pixeltable.utils.s3_store")
+        pixeltable_s3_module.S3Store = FakePixeltableS3Store
 
-        config = build_b2_config(
-            env={
-                "B2_APPLICATION_KEY_ID": "test-key-id",
-                "B2_APPLICATION_KEY": "test-application-key",
-                "B2_REGION": valid_region(),
-                "B2_BUCKET_NAME": "test-bucket",
+        with patch.dict(
+            sys.modules,
+            {
+                "pixeltable": pixeltable_module,
+                "pixeltable.utils": pixeltable_utils_module,
+                "pixeltable.utils.s3_store": pixeltable_s3_module,
             },
-            allow_prompts=False,
+        ):
+            configure_pixeltable_b2_user_agent()
+
+        client = FakePixeltableS3Store.create_boto_client(
+            extra_args={"endpoint_url": f"https://s3.{valid_region()}.backblazeb2.com"}
+        )
+        resource = FakePixeltableS3Store.create_boto_resource(
+            extra_args={"endpoint_url": f"https://s3.{valid_region()}.backblazeb2.com"}
         )
 
-        with patch.dict(os.environ, {}, clear=True):
-            export_s3_compatible_environment(config)
-            client = boto3.client(
-                "s3",
-                endpoint_url=config.endpoint_url,
-                region_name="auto",
-                config=Config(user_agent_extra="pixeltable"),
-            )
-
-        self.assertEqual(client.meta.config.user_agent_extra, "pixeltable")
-        self.assertEqual(client.meta.config.user_agent_appid, B2_SAMPLE_UA_APP_ID)
+        self.assertEqual(client.kwargs["config"].user_agent_extra, B2_SAMPLE_USER_AGENT)
+        self.assertEqual(resource.kwargs["config"].user_agent_extra, B2_SAMPLE_USER_AGENT)
+        self.assertNotEqual(client.kwargs["config"].user_agent_extra, "pixeltable")
+        self.assertNotEqual(resource.kwargs["config"].user_agent_extra, "pixeltable")
 
     def test_accepts_legacy_names_during_transition(self):
         config = build_b2_config(
