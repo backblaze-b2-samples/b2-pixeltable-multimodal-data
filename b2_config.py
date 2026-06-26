@@ -11,6 +11,7 @@ from urllib.parse import urlparse, urlunparse
 
 
 B2_SAMPLE_USER_AGENT = "b2-pixeltable-multimodal-data (backblaze-b2-samples)"
+B2_SAMPLE_UA_APP_ID = "b2-pixeltable-multimodal-data-backblaze-b2-samples"
 STANDARD_ENV_NAMES = (
     "B2_APPLICATION_KEY_ID",
     "B2_APPLICATION_KEY",
@@ -59,12 +60,15 @@ def _read_setting(
 
     reader = getpass if secret else input
     try:
-        return reader(prompt).strip()
+        value = reader(prompt).strip()
     except (EOFError, KeyboardInterrupt) as exc:
         raise B2ConfigError(
             f"Missing required B2 setting {name}. Export the standard B2_* "
             "environment variables before non-interactive runs."
         ) from exc
+    if not value:
+        raise B2ConfigError(f"Missing required B2 setting {name}.")
+    return value
 
 
 def validate_region(region: str) -> str:
@@ -196,13 +200,13 @@ def export_s3_compatible_environment(
     env: MutableMapping[str, str] | None = None,
 ) -> None:
     env = os.environ if env is None else env
-    prefix = "AWS"
-    for suffix, value in {
-        "ACCESS_KEY_ID": config.application_key_id,
-        "SECRET_ACCESS_KEY": config.application_key,
-        "DEFAULT_REGION": config.region,
-    }.items():
-        env[f"{prefix}_{suffix}"] = value
+    for stale_token_name in ("AWS_SESSION_TOKEN", "AWS_SECURITY_TOKEN"):
+        env.pop(stale_token_name, None)
+    env["AWS_ACCESS_KEY_ID"] = config.application_key_id
+    env["AWS_SECRET_ACCESS_KEY"] = config.application_key
+    env["AWS_DEFAULT_REGION"] = config.region
+    # Botocore clients created later by Pixeltable inherit this app id.
+    env["AWS_SDK_UA_APP_ID"] = B2_SAMPLE_UA_APP_ID
 
 
 def create_b2_s3_client(config: B2NotebookConfig):
@@ -228,7 +232,28 @@ def preflight_b2_bucket(client, bucket_name: str) -> None:
     try:
         client.head_bucket(Bucket=bucket_name)
     except Exception as exc:
+        detail = _preflight_error_detail(exc)
         raise B2ConfigError(
-            f"B2 preflight failed for bucket {bucket_name}: "
-            f"{exc.__class__.__name__}: {exc}"
+            f"B2 preflight failed for bucket {bucket_name}: {detail}"
         ) from exc
+
+
+def _preflight_error_detail(exc: Exception) -> str:
+    try:
+        from botocore.exceptions import ClientError
+    except ImportError:
+        ClientError = ()
+
+    if ClientError and isinstance(exc, ClientError):
+        response = getattr(exc, "response", {}) or {}
+        error = response.get("Error", {}) or {}
+        metadata = response.get("ResponseMetadata", {}) or {}
+        code = error.get("Code", "Unknown")
+        status = metadata.get("HTTPStatusCode", "unknown")
+        request_id = metadata.get("RequestId") or metadata.get("HostId")
+        detail = f"ClientError code={code} status={status}"
+        if request_id:
+            detail = f"{detail} request_id={request_id}"
+        return detail
+
+    return exc.__class__.__name__

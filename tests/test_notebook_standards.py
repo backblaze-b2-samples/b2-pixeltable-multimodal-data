@@ -28,6 +28,7 @@ class NotebookStandardsTests(unittest.TestCase):
 
         install_index, install_source = install_cells[0]
         self.assertIn("requirements.lock", install_source)
+        self.assertIn("--require-hashes", install_source)
         self.assertNotRegex(install_source, r"\s-(?:U|-upgrade)\b")
 
         setup_indexes = [
@@ -49,6 +50,8 @@ class NotebookStandardsTests(unittest.TestCase):
 
         self.assertIn("boto3==1.43.36", requirements_lock)
         self.assertIn("botocore==1.43.36", requirements_lock)
+        self.assertIn("--hash=sha256:", requirements_lock)
+        self.assertNotIn("--no-hashes", requirements_lock)
 
     def test_b2_setup_preflights_before_computed_columns(self):
         setup_indexes = [
@@ -72,7 +75,14 @@ class NotebookStandardsTests(unittest.TestCase):
                 if "pip install" not in line:
                     continue
                 self.assertIn("requirements.lock", line)
+                self.assertIn("--require-hashes", line)
                 self.assertNotRegex(line, r"\s-(?:U|-upgrade)\b")
+
+    def test_notebook_omits_debug_environment_prints(self):
+        notebook_source = "\n".join(self.code_cells)
+
+        self.assertNotIn("sys.executable", notebook_source)
+        self.assertNotIn("boto3.__version__", notebook_source)
 
     def test_no_b2_alias_or_native_api_literals(self):
         checked_text = "\n".join(
