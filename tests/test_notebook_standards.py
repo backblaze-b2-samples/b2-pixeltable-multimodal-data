@@ -11,7 +11,7 @@ NOTEBOOK = ROOT / "01-video-frames-b2.ipynb"
 class NotebookStandardsTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.nb = json.loads(NOTEBOOK.read_text())
+        cls.nb = json.loads(NOTEBOOK.read_text(encoding="utf-8"))
         cls.code_cells = [
             "".join(cell.get("source", []))
             for cell in cls.nb["cells"]
@@ -39,13 +39,13 @@ class NotebookStandardsTests(unittest.TestCase):
         self.assertLess(install_index, setup_indexes[0])
 
     def test_project_metadata_constrains_boto_dependencies(self):
-        pyproject = (ROOT / "pyproject.toml").read_text()
+        pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
 
         self.assertIn("boto3>=1.43.36,<1.44", pyproject)
         self.assertIn("botocore>=1.43.36,<1.44", pyproject)
 
     def test_lock_export_pins_boto_dependencies(self):
-        requirements_lock = (ROOT / "requirements.lock").read_text()
+        requirements_lock = (ROOT / "requirements.lock").read_text(encoding="utf-8")
 
         self.assertIn("boto3==1.43.36", requirements_lock)
         self.assertIn("botocore==1.43.36", requirements_lock)
@@ -76,7 +76,7 @@ class NotebookStandardsTests(unittest.TestCase):
 
     def test_no_b2_alias_or_native_api_literals(self):
         checked_text = "\n".join(
-            path.read_text()
+            path.read_text(encoding="utf-8")
             for path in [
                 ROOT / "01-video-frames-b2.ipynb",
                 ROOT / "README.md",

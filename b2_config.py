@@ -105,7 +105,13 @@ def validate_public_url_base(
         raise B2ConfigError("B2_PUBLIC_URL_BASE must use https.")
     if parsed.username or parsed.password:
         raise B2ConfigError("B2_PUBLIC_URL_BASE must not contain userinfo.")
-    if parsed.params or parsed.query or parsed.fragment or parsed.port:
+    try:
+        parsed_port = parsed.port
+    except ValueError as exc:
+        raise B2ConfigError(
+            "B2_PUBLIC_URL_BASE must not include a non-numeric port."
+        ) from exc
+    if parsed.params or parsed.query or parsed.fragment or parsed_port:
         raise B2ConfigError(
             "B2_PUBLIC_URL_BASE must not include params, query strings, "
             "fragments, or custom ports."
