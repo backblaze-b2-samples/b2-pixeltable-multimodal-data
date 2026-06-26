@@ -196,6 +196,22 @@ class B2ConfigTests(unittest.TestCase):
                 allow_prompts=False,
             )
 
+    def test_rejects_public_url_with_zero_port(self):
+        with self.assertRaisesRegex(B2ConfigError, "custom ports"):
+            build_b2_config(
+                env={
+                    "B2_APPLICATION_KEY_ID": "test-key-id",
+                    "B2_APPLICATION_KEY": "test-application-key",
+                    "B2_REGION": valid_region(),
+                    "B2_BUCKET_NAME": "test-bucket",
+                    "B2_PUBLIC_URL_BASE": (
+                        f"https://s3.{valid_region()}.backblazeb2.com:0/"
+                        "test-bucket"
+                    ),
+                },
+                allow_prompts=False,
+            )
+
     def test_rejects_public_url_outside_selected_bucket(self):
         with self.assertRaisesRegex(B2ConfigError, "bucket root"):
             build_b2_config(

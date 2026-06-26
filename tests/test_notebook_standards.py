@@ -53,6 +53,17 @@ class NotebookStandardsTests(unittest.TestCase):
         self.assertIn("--hash=sha256:", requirements_lock)
         self.assertNotIn("--no-hashes", requirements_lock)
 
+    def test_workflow_installs_hash_checked_requirements_before_tests(self):
+        workflow = (
+            ROOT / ".github" / "workflows" / "notebook-standards.yml"
+        ).read_text(encoding="utf-8")
+        install_command = "python -m pip install --require-hashes -r requirements.lock"
+        test_command = "python -m unittest discover -s tests"
+
+        self.assertIn(install_command, workflow)
+        self.assertNotIn("pip install --dry-run", workflow)
+        self.assertLess(workflow.index(install_command), workflow.index(test_command))
+
     def test_b2_setup_preflights_before_computed_columns(self):
         setup_indexes = [
             index

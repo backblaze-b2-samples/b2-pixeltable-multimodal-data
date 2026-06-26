@@ -115,7 +115,12 @@ def validate_public_url_base(
         raise B2ConfigError(
             "B2_PUBLIC_URL_BASE must not include a non-numeric port."
         ) from exc
-    if parsed.params or parsed.query or parsed.fragment or parsed_port:
+    if (
+        parsed.params
+        or parsed.query
+        or parsed.fragment
+        or parsed_port is not None
+    ):
         raise B2ConfigError(
             "B2_PUBLIC_URL_BASE must not include params, query strings, "
             "fragments, or custom ports."
