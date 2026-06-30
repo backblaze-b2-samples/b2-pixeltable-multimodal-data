@@ -36,6 +36,27 @@ Learn more in the [Pixeltable documentation](https://docs.pixeltable.com/overvie
 - **Simple setup:** Minimal configuration required  
 - **Automatic URL generation:** Pixeltable generates accessible URLs for stored outputs  
 
-**Prerequisites:** Backblaze B2 account (free tier available) and Python 3.9+
+**Prerequisites:** Backblaze B2 account (free tier available) and Python 3.10+
+
+## B2 Configuration
+
+The notebook uses Backblaze B2 through the S3-compatible API by default. Configure
+the sample with these user-facing environment variables:
+
+```bash
+B2_APPLICATION_KEY_ID=your-application-key-id
+B2_APPLICATION_KEY=your-application-key
+B2_BUCKET_NAME=your-bucket-name
+B2_REGION=your-bucket-region
+B2_PUBLIC_URL_BASE=https://s3.your-bucket-region.backblazeb2.com/your-bucket-name
+```
+
+`B2_PUBLIC_URL_BASE` is the base URL Pixeltable writes generated assets under.
+If omitted, the notebook builds it from the selected region and bucket. If set,
+it must be an HTTPS Backblaze B2 URL rooted at the selected bucket. The notebook
+configures the Backblaze sample user agent on both its preflight S3 client and
+Pixeltable's delegated S3 clients, then runs a bounded bucket preflight before
+frame processing starts. Previous key-id and bucket variable names are accepted
+for a transition period, but new automation should use the standard names above.
 
 ---
